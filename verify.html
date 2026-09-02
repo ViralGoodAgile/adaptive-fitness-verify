@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify an Adaptive Fitness credential</title>
+<style>
+  :root{
+    --paper:#F5F1E8; --ink:#20241f; --green:#1F5E3F; --green-soft:#e7efe9;
+    --red:#8c2f22; --red-soft:#f6e8e4; --mut:#5c635a; --line:#d8d2c2;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  main{max-width:680px;margin:0 auto;padding:40px 20px 72px}
+  header h1{font-size:26px;line-height:1.25;margin:0 0 6px;color:var(--green)}
+  header p{margin:0 0 26px;color:var(--mut);max-width:56ch}
+  .in{background:#fff;border:1px solid var(--line);border-radius:6px;padding:18px}
+  textarea{width:100%;min-height:120px;border:1px solid var(--line);border-radius:4px;
+    padding:10px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical}
+  textarea:focus,button:focus-visible,input:focus-visible{outline:3px solid var(--green);outline-offset:1px}
+  .row{display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  button{background:var(--green);color:#fff;border:0;border-radius:4px;
+    padding:10px 22px;font-size:16px;cursor:pointer}
+  button:hover{background:#17492f}
+  label.file{color:var(--green);text-decoration:underline;cursor:pointer;font-size:15px}
+  input[type=file]{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+  #verdict{display:none;margin-top:26px;border-radius:6px;padding:22px 24px;border:1px solid}
+  #verdict.ok{display:block;background:var(--green-soft);border-color:var(--green)}
+  #verdict.bad{display:block;background:var(--red-soft);border-color:var(--red)}
+  #verdict h2{margin:0 0 4px;font-size:22px}
+  #verdict.ok h2{color:var(--green)} #verdict.bad h2{color:var(--red)}
+  #verdict p{margin:4px 0 0}
+  dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:18px 0 0}
+  dt{color:var(--mut)} dd{margin:0;overflow-wrap:anywhere}
+  ul.checks{list-style:none;padding:0;margin:18px 0 0;border-top:1px solid var(--line)}
+  ul.checks li{padding:9px 0;border-bottom:1px solid var(--line)}
+  ul.checks li::before{content:"";display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:10px}
+  li.pass::before{background:var(--green)} li.fail::before{background:var(--red)} li.warn::before{background:#b98a1e}
+  footer{margin-top:44px;color:var(--mut);font-size:13.5px;border-top:1px solid var(--line);padding-top:14px}
+  @media (prefers-reduced-motion:no-preference){#verdict{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Verify an Adaptive Fitness credential</h1>
+  <p>This page checks a credential's signature against the issuer's published key, entirely in your browser. Nothing you paste leaves this page. It works even when go.transform-ability.com is unreachable.</p>
+</header>
+
+<div class="in">
+  <label for="jws" style="display:block;margin:0 0 8px">Paste the credential - the contents of your <span style="font-family:ui-monospace,Menlo,monospace">sgep-fitness-credential.jwt</span> file</label>
+  <textarea id="jws" spellcheck="false" placeholder="eyJhbGciOiJSUzI1NiIs..."></textarea>
+  <div class="row">
+    <button id="go">Verify credential</button>
+    <label class="file" for="file">or choose the .jwt file<input type="file" id="file" accept=".jwt,.txt,text/plain"></label>
+  </div>
+</div>
+
+<section id="verdict" aria-live="polite">
+  <h2 id="v-title"></h2>
+  <p id="v-sub"></p>
+  <dl id="v-facts"></dl>
+  <ul class="checks" id="v-checks"></ul>
+</section>
+
+<footer>
+  Issued by Orderly Disruption Ltd, trading as Adaptive Fitness. This mirror is for verification when the primary service is unavailable; when it is up, <span style="font-family:ui-monospace,Menlo,monospace">go.transform-ability.com</span> is the live source, including up-to-the-minute revocation.
+</footer>
+</main>
+
+<script>
+"use strict";
+/* Mirrored from worker.js OBV3_PUBLIC_JWKS - the sync script asserts equality. */
+const MIRROR_JWKS = {
+  keys: [
+    {
+      kty: 'RSA',
+      n: 'ksrm8SRFXTteAI7RNoGd_2j58iSBGLHwXGKO7KgNt_qwRtfxgR_1VQnxi4yTnKEVPxBsGpJJUWjmXKAUqBiA9mpj9ExDUi6M3h3r4N5HmGM8gBTNlNi_6xOQ1mqf-EXYocNVkYbpO0wXEH2FNtWtlhKEdXQdc4lvjRb2Q30rLgJOjr5rgbWtiCYoT_bZhOE6x6NjuAfEmnIKMOIv_JNY4XbA7Y6y7CvuPKCf0LGOQNwvU6iklaQYKifu7db5mkvOjRdFgOk2DpwkKEAV_jVQuevm3OHPccNrVYasgz138DrNau91XC1ZejZIS0m9v9r45Jkwt1DGEqPizuIKqVD8VQ',
+      e: 'AQAB',
+      alg: 'RS256',
+      use: 'sig',
+      kid: '2026-08',
+    },
+  ],
+};
+const STATUS_SNAPSHOT_PATH = './status-list-1.jwt';
+const STALE_AFTER_DAYS = 14;
+
+function b64uToBytes(s){
+  s = s.replace(/-/g,'+').replace(/_/g,'/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s); const out = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function parseJws(compact){
+  const t = String(compact||'').trim();
+  const parts = t.split('.');
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return null;
+  let header, payload;
+  try {
+    header = JSON.parse(new TextDecoder().decode(b64uToBytes(parts[0])));
+    payload = JSON.parse(new TextDecoder().decode(b64uToBytes(parts[1])));
+  } catch { return null; }
+  return { header, payload, signingInput: parts[0]+'.'+parts[1], sig: b64uToBytes(parts[2]) };
+}
+async function verifyJws(jws, jwks){
+  if (!jws || !jws.header) return { ok:false, reason:'unparseable' };
+  if (jws.header.alg !== 'RS256') return { ok:false, reason:'algorithm is not RS256' };
+  const jwk = (jwks.keys||[]).find(k => k && k.kid === jws.header.kid);
+  if (!jwk) return { ok:false, reason:'unknown signing key (kid '+String(jws.header.kid)+')' };
+  const key = await crypto.subtle.importKey('jwk', jwk, { name:'RSASSA-PKCS1-v1_5', hash:'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, jws.sig, new TextEncoder().encode(jws.signingInput));
+  return ok ? { ok:true, kid: jwk.kid } : { ok:false, reason:'signature does not match' };
+}
+async function gunzip(bytes){
+  const ds = new DecompressionStream('gzip');
+  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+function statusBitGet(bytes, index){
+  if (!(bytes instanceof Uint8Array) || !Number.isInteger(index)) return null;
+  if (index < 0 || index >= bytes.length * 8) return null;
+  return (bytes[index >> 3] & (0x80 >> (index & 7))) !== 0;
+}
+async function checkRevocation(credPayload, statusJwtText, jwks){
+  const st = credPayload && credPayload.credentialStatus;
+  if (!st || st.statusPurpose !== 'revocation') return { state:'none' };
+  const idx = Number.parseInt(st.statusListIndex, 10);
+  if (!Number.isInteger(idx)) return { state:'unreadable' };
+  const jws = parseJws(statusJwtText);
+  if (!jws) return { state:'unreadable' };
+  const sig = await verifyJws(jws, jwks);
+  if (!sig.ok) return { state:'unreadable' };
+  const sub = jws.payload && jws.payload.credentialSubject;
+  const enc = sub && sub.type === 'BitstringStatusList' && sub.encodedList;
+  if (!enc || enc[0] !== 'u') return { state:'unreadable' };
+  let bytes;
+  try { bytes = await gunzip(b64uToBytes(enc.slice(1))); } catch { return { state:'unreadable' }; }
+  const bit = statusBitGet(bytes, idx);
+  if (bit === null) return { state:'unreadable' };
+  const asOf = jws.payload.validFrom || (jws.payload.nbf ? new Date(jws.payload.nbf*1000).toISOString() : null);
+  return { state: bit ? 'revoked' : 'clear', asOf };
+}
+function fmtDate(iso){
+  if (!iso) return 'unknown date';
+  const d = new Date(iso);
+  return isNaN(d) ? 'unknown date' : d.toISOString().slice(0,10);
+}
+async function runVerify(text, statusJwtText, nowMs){
+  const checks = []; const facts = [];
+  const jws = parseJws(text);
+  if (!jws) return { verdict:'bad', title:'Not a credential', sub:'That text is not a signed credential. Paste the full contents of the .jwt file, one long line of three dot-separated parts.', checks, facts };
+  const sig = await verifyJws(jws, MIRROR_JWKS);
+  checks.push(sig.ok ? {s:'pass', t:'Signature verified with the Adaptive Fitness key (kid '+sig.kid+')'} : {s:'fail', t:'Signature check failed: '+sig.reason});
+  if (!sig.ok) return { verdict:'bad', title:'Could not verify', sub:'The signature does not verify against the issuer key held by this page.', checks, facts };
+  const p = jws.payload;
+  facts.push(['Credential', p.name || (Array.isArray(p.type) ? p.type.join(', ') : 'credential')]);
+  facts.push(['Credential id', p.jti || p.id || 'not stated']);
+  facts.push(['Issued', fmtDate(p.validFrom)]);
+  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+  let expired = false;
+  if (p.exp !== undefined){
+    expired = now/1000 > p.exp;
+    facts.push(['Valid until', fmtDate(p.validUntil)]);
+    checks.push(expired ? {s:'fail', t:'The credential expired on '+fmtDate(p.validUntil)} : {s:'pass', t:'Within its validity period'});
+  } else {
+    checks.push({s:'pass', t:'No expiry date - the credential does not expire'});
+  }
+  let revoked = false;
+  const rev = await checkRevocation(p, statusJwtText, MIRROR_JWKS);
+  if (rev.state === 'clear' || rev.state === 'revoked'){
+    revoked = rev.state === 'revoked';
+    const asOf = fmtDate(rev.asOf);
+    const staleMs = rev.asOf ? now - Date.parse(rev.asOf) : Infinity;
+    const stale = !(staleMs < STALE_AFTER_DAYS*24*3600*1000);
+    if (revoked) checks.push({s:'fail', t:'REVOKED on the issuer status list snapshot of '+asOf});
+    else checks.push({s: stale ? 'warn' : 'pass', t:'Not revoked, per the status snapshot of '+asOf+(stale ? ' - this snapshot is old; check the live service when it returns' : '')});
+  } else if (rev.state === 'none'){
+    checks.push({s:'warn', t:'This credential names no revocation list, so revocation cannot be checked'});
+  } else {
+    checks.push({s:'warn', t:'Revocation could not be checked from this mirror; the signature result above still stands'});
+  }
+  const good = !expired && !revoked;
+  return {
+    verdict: good ? 'ok' : 'bad',
+    title: good ? 'Credential verified' : (revoked ? 'Credential revoked' : 'Credential expired'),
+    sub: good ? 'The signature is genuine: this credential was issued by Adaptive Fitness and has not been altered.'
+              : 'The signature is genuine, but the credential is no longer valid - see the checks below.',
+    checks, facts,
+  };
+}
+/* ---- browser wiring ---- */
+if (typeof document !== 'undefined'){
+  const $ = (id) => document.getElementById(id);
+  let statusText = null;
+  fetch(STATUS_SNAPSHOT_PATH, { cache:'no-store' }).then(r => r.ok ? r.text() : null).then(t => { statusText = t; }).catch(() => {});
+  async function show(){
+    const r = await runVerify($('jws').value, statusText);
+    const v = $('verdict'); v.className = r.verdict === 'ok' ? 'ok' : 'bad';
+    $('v-title').textContent = r.title; $('v-sub').textContent = r.sub;
+    $('v-facts').innerHTML = r.facts.map(([k,val]) => '<dt>'+k+'</dt><dd>'+String(val).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))+'</dd>').join('');
+    $('v-checks').innerHTML = r.checks.map(c => '<li class="'+c.s+'">'+String(c.t).replace(/[<>&]/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[ch]))+'</li>').join('');
+    v.scrollIntoView({ block:'nearest' });
+  }
+  $('go').addEventListener('click', show);
+  $('file').addEventListener('change', async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    $('jws').value = (await f.text()).trim();
+    show();
+  });
+}
+if (typeof module !== 'undefined') module.exports = { parseJws, verifyJws, checkRevocation, runVerify, statusBitGet, b64uToBytes, MIRROR_JWKS };
+</script>
+</body>
+</html>
